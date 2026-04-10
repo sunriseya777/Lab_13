@@ -1,0 +1,197 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+
+using namespace std;
+
+const double EPS = 1e-12;
+
+// Проверка на ноль с заданной точностью
+bool is_zero(double x) {
+    return fabs(x) < EPS;
+}
+
+/**
+ * Приведение расширенной матрицы системы к ступенчатому виду (Reduced Row Echelon Form)
+ * методом Гаусса-Жордана с выбором главного элемента по столбцу.
+ *
+ * Элементарные преобразования, используемые в алгоритме:
+ * 1. Перестановка двух строк (уравнений) – выбор главного элемента.
+ * 2. Умножение строки на ненулевое число (нормировка ведущего элемента к 1).
+ * 3. Прибавление к одной строке другой строки, умноженной на число (обнуление элементов в столбце).
+ *
+ matrix Расширенная матрица размера M x (N+1) (последний столбец – свободные члены).
+ M      Количество уравнений (строк).
+ N      Количество неизвестных (столбцов коэффициентов).
+ */
+void to_rref(vector < vector < double >> & matrix, int M, int N) {
+    int row = 0; // текущая строка, в которую помещаем ведущий элемент
+
+    for (int col = 0; col < N && row < M; ++col) {
+        // ---- Поиск главного (ведущего) элемента в столбце col ----
+        int pivot_row = row;
+        double max_val = fabs(matrix[row][col]);
+        for (int i = row + 1; i < M; ++i) {
+            if (fabs(matrix[i][col]) > max_val) {
+                max_val = fabs(matrix[i][col]);
+                pivot_row = i;
+            }
+        }
+
+        // Если в столбце нет ненулевого элемента (с учётом EPS), пропускаем столбец
+        if (max_val < EPS)
+            continue;
+
+        // ---- Перестановка строк (преобразование 1) ----
+        if (pivot_row != row) {
+            swap(matrix[row], matrix[pivot_row]);
+        }
+
+        // ---- Нормировка строки: делим на ведущий элемент (преобразование 2) ----
+        double pivot = matrix[row][col];
+        for (int j = col; j <= N; ++j) {
+            matrix[row][j] /= pivot;
+        }
+
+        // ---- Обнуление всех остальных строк в данном столбце (преобразование 3) ----
+        for (int i = 0; i < M; ++i) {
+            if (i != row && !is_zero(matrix[i][col])) {
+                double factor = matrix[i][col];
+                for (int j = col; j <= N; ++j) {
+                    matrix[i][j] -= factor * matrix[row][j];
+                }
+            }
+        }
+
+        ++row; // переходим к следующей строке
+    }
+}
+
+/**
+ * Вывод матрицы в текстовый файл с форматированием.
+ */
+void print_matrix(const vector < vector < double>> & matrix, int M, int N, ofstream& out) {
+    out << fixed << setprecision(6);
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j <= N; ++j) {
+            out << setw(12) << matrix[i][j] << " ";
+        }
+        out << "\n";
+    }
+}
+
+/**
+ * Проверяет, имеет ли система единственное решение.
+ * Возвращает true, если решение существует и единственно.
+ * В этом случае в переданную матрицу будет записан её RREF-вид.
+ *
+ * @param matrix Расширенная матрица (будет приведена к RREF).
+ * @param M      Количество уравнений.
+ * @param N      Количество неизвестных.
+ * @return true  – система имеет единственное решение,
+ *         false – система несовместна или имеет бесконечно много решений.
+ */
+bool has_unique_solution(vector < vector < double>> & matrix, int M, int N) {
+    to_rref(matrix, M, N);
+
+    // Определяем ранг и проверяем на противоречия
+    int rank = 0;
+    for (int i = 0; i < M; ++i) {
+        bool all_zeros = true;
+        for (int j = 0; j < N; ++j) {
+            if (!is_zero(matrix[i][j])) {
+                all_zeros = false;
+                break;
+            }
+        }
+        if (!all_zeros) {
+            ++rank;
+        }
+        else {
+            // Строка из одних нулей в коэффициентах, но свободный член не ноль -> несовместна
+            if (!is_zero(matrix[i][N])) {
+                return false;
+            }
+        }
+    }
+
+    // Единственное решение возможно только если ранг равен числу неизвестных
+    return (rank == N);
+}
+
+int main() {
+    setlocale(LC_ALL, "RU");
+    // Открываем входной файл
+    ifstream fin("test_11");
+    if (!fin.is_open()) {
+        cerr << "Ошибка: не удалось открыть файл input.txt" << endl;
+        return 1;
+    }
+
+    int M, N;
+    fin >> M >> N;
+
+    // Создаём расширенную матрицу (N столбцов коэффициентов + 1 столбец свободных членов)
+    vector < vector < double>> matrix(M, vector<double>(N + 1));
+
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j <= N; ++j) {
+            fin >> matrix[i][j];
+        }
+    }
+    fin.close();
+
+    // ------------------ Задание 1: приведение к ступенчатому виду ------------------
+    vector < vector < double>>  mat_for_step = matrix; // копия для вывода ступенчатого вида
+    to_rref(mat_for_step, M, N);
+
+    ofstream fstep("step_result");
+    if (!fstep.is_open()) {
+        cerr << "Ошибка: не удалось создать файл step_result" <<endl;
+        return 1;
+    }
+    fstep <<"Ступенчатый вид расширенной матрицы системы:\n";
+    print_matrix(mat_for_step, M, N, fstep);
+    fstep.close();
+
+    // ------------------ Задание 2: поиск единственного решения ------------------
+    vector < vector < double>> mat_for_sol = matrix; // копия для анализа решения
+    ofstream fsol("solution_result");
+    if (!fsol.is_open()) {
+        cerr << "Ошибка: не удалось создать файл solution_result" << endl;
+        return 1;
+    }
+
+    if (!has_unique_solution(mat_for_sol, M, N)) {
+        fsol << "Система не имеет единственного решения.\n";
+    }
+    else {
+        fsol << "Система имеет единственное решение:\n";
+        fsol << fixed << setprecision(6);
+        // Извлекаем решение: для каждой переменной x_j (j = 0..N-1) ищем строку,
+        // в которой ведущий элемент стоит в столбце j.
+        for (int j = 0; j < N; ++j) {
+            int row_with_pivot = -1;
+            for (int i = 0; i < M; ++i) {
+                if (!is_zero(mat_for_sol[i][j])) {
+                    row_with_pivot = i;
+                    break;
+                }
+            }
+            if (row_with_pivot != -1) {
+                fsol << "x" << j + 1 << " = " << mat_for_sol[row_with_pivot][N] << "\n";
+            }
+            else {
+                // Теоретически при rank == N такого быть не должно, но на всякий случай:
+                fsol << "x" << j + 1 << " свободная переменная \n";
+            }
+        }
+    }
+    fsol.close();
+
+    cout << "Результаты сохранены в файлы: step_result и solution_result";
+
+    return 0;
+}
